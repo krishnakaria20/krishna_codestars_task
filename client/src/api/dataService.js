@@ -1,12 +1,4 @@
 import axios from 'axios'
-
-// Relative base URL: Vite's proxy handles it in dev, same origin in prod.
-const api = axios.create({ baseURL: '/api' })
-
-export function getHealth() {
-  return api.get('/health').then((res) => res.data)
-}
-
-export function getCpData(handle) {
-  return api.get(`/cp-data/${handle}`).then((res) => res.data)
-}
+const api=axios.create({baseURL:import.meta.env.VITE_API_URL || '/api',timeout:30000})
+export async function analyze(handles){const params=new URLSearchParams();for(const [k,v] of Object.entries(handles)) if(v?.trim()) params.set(k,v.trim());return (await api.get(`/analyze?${params.toString()}`)).data}
+export async function health(){return (await api.get('/health')).data}

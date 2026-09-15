@@ -1,85 +1,30 @@
-import { useState } from 'react'
-import { getCpData } from '../api/dataService'
-import RatingChart from './charts/RatingChart'
-import DifficultyChart from './charts/DifficultyChart'
+import {useMemo,useRef} from 'react'
+import {motion} from 'framer-motion'
+import {AreaChart,Area,XAxis,YAxis,Tooltip,ResponsiveContainer,BarChart,Bar,CartesianGrid} from 'recharts'
+import {exportPng} from '../utils/exportPng.js'
 
-function StatCard({ label, value }) {
-  return (
-    <div className="bg-neutral-900 rounded-xl p-4 border border-neutral-800">
-      <p className="text-neutral-500 text-xs mb-1">{label}</p>
-      <p className="text-xl font-medium">{value}</p>
-    </div>
-  )
+const labels={codeforces:'Codeforces',leetcode:'LeetCode',codechef:'CodeChef',atcoder:'AtCoder'}
+const colors={codeforces:'#f97316',leetcode:'#22c55e',codechef:'#a855f7',atcoder:'#38bdf8'}
+const fmt=n=>new Intl.NumberFormat().format(n||0)
+function Reveal({children,delay=0,className=''}){return <motion.section className={className} initial={{opacity:0,y:28}} whileInView={{opacity:1,y:0}} viewport={{once:true,amount:.12}} transition={{duration:.55,delay}}>{children}</motion.section>}
+function PlatformCard({p}){if(p.status==='not_connected')return null;return <div className={`platform-card ${p.status}`}><div className="platform-top"><span className="platform-icon" style={{'--accent':colors[p.platform]}}>{p.platform==='codeforces'?'CF':p.platform==='leetcode'?'LC':p.platform==='codechef'?'CC':'AC'}</span><div><strong>{labels[p.platform]}</strong><small>@{p.handle}</small></div><span className={`badge ${p.status}`}>{p.status==='ok'?'CONNECTED':'UNAVAILABLE'}</span></div>{p.status==='ok'?<div className="mini-stats"><div><b>{fmt(p.stats.solved)}</b><span>Solved</span></div><div><b>{fmt(p.stats.contests)}</b><span>Contests</span></div><div><b>{fmt(p.stats.rating)}</b><span>Rating</span></div></div>:<p className="muted">{p.message}</p>}</div>}
+function Dashboard({data,onBack}){
+ const exportRef=useRef();const {combined,platforms,handles}=data
+ const ratingSeries=useMemo(()=>Object.entries(platforms).filter(([,p])=>p.status==='ok'&&p.ratings?.length).flatMap(([name,p])=>p.ratings.map(x=>({...x,platform:name,label:new Date(x.date).toLocaleDateString(undefined,{month:'short',year:'2-digit'})}))).sort((a,b)=>new Date(a.date)-new Date(b.date)),[platforms])
+ const difficulty=[{name:'Easy',value:combined.difficulty.easy},{name:'Medium',value:combined.difficulty.medium},{name:'Hard',value:combined.difficulty.hard}]
+ const activity=combined.activity.slice(-180).map(x=>({...x,label:x.date.slice(5)}))
+ return <div className="dashboard">
+  <nav className="nav dashboard-nav"><div className="brand"><span className="brand-dot"/>CP<span>Pulse</span></div><div className="dash-actions"><button onClick={onBack} className="ghost-btn">← New analysis</button><button onClick={()=>exportPng(exportRef.current, Object.values(handles).find(Boolean))} className="export-btn">Export summary ↓</button></div></nav>
+  <main className="dash-main">
+   <Reveal className="dash-hero"><div><div className="eyebrow">YOUR COMPETITIVE PROGRAMMING STORY</div><h1>Numbers that tell<br/><em>the whole story.</em></h1><p>Aggregated live data from {combined.activePlatforms} connected platform{combined.activePlatforms!==1?'s':''}.</p></div><div className="hero-meta"><span>UPDATED</span><b>{new Date(data.generatedAt).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</b></div></Reveal>
+   <Reveal className="metric-grid" delay={.05}>{[[fmt(combined.totalSolved),'TOTAL SOLVED','across platforms'],[fmt(combined.totalContests),'CONTESTS','participations'],[fmt(combined.activePlatforms),'PLATFORMS','connected live'],[combined.highestRating?fmt(combined.highestRating):'—','PEAK RATING','highest available rating']].map(([v,t,s])=><div className="metric" key={t}><b>{v}</b><span>{t}</span><small>{s}</small></div>)}</Reveal>
+   <Reveal className="section-block"><div className="section-title"><div><span>02 / PLATFORM SNAPSHOT</span><h2>Where you compete</h2></div><p>Each source stays independent while the headline metrics are unified.</p></div><div className="platform-grid">{Object.values(platforms).map(p=><PlatformCard p={p} key={p.platform}/>)}</div></Reveal>
+   {ratingSeries.length>0 && <Reveal className="section-block"><div className="section-title"><div><span>03 / PERFORMANCE</span><h2>Rating over time</h2></div><p>Contest rating history from platforms that expose it publicly.</p></div><div className="chart-card"><ResponsiveContainer width="100%" height={330}><AreaChart data={ratingSeries}><defs><linearGradient id="ratingFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#f97316" stopOpacity={.35}/><stop offset="100%" stopColor="#f97316" stopOpacity={0}/></linearGradient></defs><CartesianGrid strokeDasharray="3 3" stroke="#25252b"/><XAxis dataKey="label" minTickGap={35} stroke="#71717a"/><YAxis stroke="#71717a"/><Tooltip contentStyle={{background:'#15151a',border:'1px solid #2b2b32',borderRadius:12}}/><Area type="monotone" dataKey="rating" stroke="#f97316" strokeWidth={3} fill="url(#ratingFill)"/></AreaChart></ResponsiveContainer><div className="chart-note">Multiple platforms are represented in the unified timeline where rating data is available.</div></div></Reveal>}
+   <Reveal className="section-block insight-grid"><div className="insight-card"><span>PRODUCTIVE MONTH</span><b>{combined.productiveMonth?.month||'—'}</b><small>{combined.productiveMonth?`${fmt(combined.productiveMonth.count)} activity events`: 'No activity data'}</small></div><div className="insight-card"><span>BEST ACTIVITY STREAK</span><b>{combined.streak} days</b><small>based on available public activity</small></div><div className="insight-card"><span>TOPICS / TAGS</span><div className="tag-cloud">{combined.topics?.length?combined.topics.slice(0,8).map(t=><span key={t}>{t}</span>):<small>Tags unavailable</small>}</div></div></Reveal><Reveal className="section-block split"><div><div className="section-title"><div><span>04 / PROBLEM MIX</span><h2>Difficulty breakdown</h2></div></div><div className="chart-card"><ResponsiveContainer width="100%" height={280}><BarChart data={difficulty} margin={{top:10,right:10,left:-20,bottom:0}}><CartesianGrid strokeDasharray="3 3" stroke="#25252b"/><XAxis dataKey="name" stroke="#71717a"/><YAxis stroke="#71717a"/><Tooltip contentStyle={{background:'#15151a',border:'1px solid #2b2b32',borderRadius:12}}/><Bar dataKey="value" fill="#f97316" radius={[8,8,0,0]}/></BarChart></ResponsiveContainer></div></div><div><div className="section-title"><div><span>05 / TOOLBOX</span><h2>Languages</h2></div></div><div className="language-card">{combined.languages.length?<div className="language-list">{combined.languages.map((x,i)=><div key={x}><span>{String(i+1).padStart(2,'0')}</span><b>{x}</b></div>)}</div>:<div className="empty-state">Language metadata isn't exposed consistently across the connected public sources.</div>}</div></div></Reveal>
+   <Reveal className="section-block"><div className="section-title"><div><span>06 / CONSISTENCY</span><h2>Your activity pulse</h2></div><p>Combined public activity where source APIs provide it.</p></div><div className="heatmap">{activity.length?activity.map((d,i)=><span key={`${d.date}-${i}`} title={`${d.date}: ${d.count} activity`} className={d.count>5?'high':d.count>2?'mid':'low'} style={{opacity:Math.min(.35+d.count/10,1)}}/>):<div className="empty-state">No activity timeline was available from the connected platforms.</div>}</div></Reveal>
+   <Reveal className="section-block"><div className="section-title"><div><span>07 / RECENT WORK</span><h2>What you've been solving</h2></div></div><div className="recent-list">{combined.recent.length?combined.recent.map((x,i)=><div className="recent-item" key={`${x.date}-${i}`}><span className="recent-platform">{labels[x.platform]}</span><b>{x.title}</b><small>{new Date(x.date).toLocaleDateString()}</small><i>{x.detail}</i></div>):<div className="empty-state">Recent problem data wasn't exposed by the connected sources.</div>}</div></Reveal>
+   <Reveal className="summary-wrap"><div className="summary-card" ref={exportRef}><div className="summary-top"><div className="brand"><span className="brand-dot"/>CP<span>Pulse</span></div><span>YEAR IN REVIEW</span></div><div className="summary-main"><div><small>COMBINED SOLVED</small><strong>{fmt(combined.totalSolved)}</strong></div><div><small>CONTESTS</small><strong>{fmt(combined.totalContests)}</strong></div><div><small>PLATFORMS</small><strong>{combined.activePlatforms}/4</strong></div></div><div className="summary-foot"><span>{Object.values(handles).filter(Boolean).map((h,i)=><b key={i}>@{h}</b>)}</span><span>Generated {new Date().toLocaleDateString()}</span></div></div></Reveal>
+  </main>
+ </div>
 }
-
-export default function Dashboard() {
-  const [handle, setHandle] = useState('tourist')
-  const [data, setData] = useState(null)
-  const [status, setStatus] = useState('idle') // idle | loading | error | done
-
-  async function handleSearch(e) {
-    e.preventDefault()
-    setStatus('loading')
-    try {
-      const result = await getCpData(handle)
-      setData(result)
-      setStatus('done')
-    } catch {
-      setStatus('error')
-    }
-  }
-
-  return (
-    <div className="min-h-screen px-6 py-10 max-w-2xl mx-auto">
-      <p className="text-xs uppercase tracking-wide text-neutral-500">
-        codestars technical committee · task 2
-      </p>
-      <h1 className="text-2xl font-medium mt-1 mb-6">
-        competitive programming dashboard
-      </h1>
-
-      <form onSubmit={handleSearch} className="flex gap-2 mb-8">
-        <input
-          value={handle}
-          onChange={(e) => setHandle(e.target.value)}
-          placeholder="codeforces handle"
-          className="flex-1 bg-neutral-900 border border-neutral-800 rounded-lg px-3 py-2 text-sm outline-none focus:border-neutral-600"
-        />
-        <button
-          type="submit"
-          className="bg-emerald-500 text-emerald-950 text-sm font-medium px-4 py-2 rounded-lg"
-        >
-          search
-        </button>
-      </form>
-
-      {status === 'loading' && <p className="text-neutral-500 text-sm">loading...</p>}
-      {status === 'error' && (
-        <p className="text-red-400 text-sm">couldn't find that handle — try another.</p>
-      )}
-
-      {status === 'done' && data && (
-        <div className="flex flex-col gap-6">
-          <div className="grid grid-cols-2 gap-3">
-            <StatCard label="current rating" value={data.currentRating} />
-            <StatCard label="max rating" value={data.maxRating} />
-            <StatCard label="rank" value={data.rank} />
-            <StatCard label="contests" value={data.contestsCount} />
-            <StatCard label="problems solved" value={data.solved.totalSolved} />
-            <StatCard label="best rank" value={data.trend.bestRank ?? '—'} />
-          </div>
-
-          <div className="bg-neutral-900 rounded-xl p-4 border border-neutral-800">
-            <p className="text-xs text-neutral-500 mb-2">rating history</p>
-            <RatingChart ratingHistory={data.ratingHistory} />
-          </div>
-
-          <div className="bg-neutral-900 rounded-xl p-4 border border-neutral-800">
-            <p className="text-xs text-neutral-500 mb-2">problems by difficulty</p>
-            <DifficultyChart byDifficulty={data.solved.byDifficulty} />
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
+export default Dashboard
