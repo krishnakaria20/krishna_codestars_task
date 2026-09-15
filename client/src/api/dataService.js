@@ -6,3 +6,7 @@ const api = axios.create({ baseURL: '/api' })
 export function getHealth() {
   return api.get('/health').then((res) => res.data)
 }
+
+export function getCpData(handle) {
+  return api.get(`/cp-data/${handle}`).then((res) => res.data)
+}

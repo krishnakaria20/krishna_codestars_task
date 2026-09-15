@@ -35,6 +35,12 @@ function normalizeProfile(handle, info, ratingHistory) {
 
 // The one function the rest of the app uses — fetches both endpoints
 // and hands back a single, clean, predictable object.
+// user.status returns every submission (accepted or not), most recent first.
+// count=10000 is generous enough to cover almost all real accounts in one call.
+export async function getCodeforcesSubmissions(handle) {
+  return callApi(`user.status?handle=${handle}&from=1&count=10000`)
+}
+
 export async function getCodeforcesProfile(handle) {
   const [infoResult, ratingHistory] = await Promise.all([
     callApi(`user.info?handles=${handle}`),

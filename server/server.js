@@ -1,7 +1,11 @@
 import express from 'express'
 import cors from 'cors'
 import dotenv from 'dotenv'
-import { getCodeforcesProfile } from './services/codeforces.js'
+import {
+  getCodeforcesProfile,
+  getCodeforcesSubmissions,
+} from './services/codeforces.js'
+import { aggregateSubmissions, aggregateRatingTrend } from './utils/aggregate.js'
 
 dotenv.config()
 
@@ -17,11 +21,19 @@ app.get('/api/health', (req, res) => {
 
 app.get('/api/cp-data/:handle', async (req, res) => {
   try {
-    const profile = await getCodeforcesProfile(req.params.handle)
-    res.json(profile)
+    const { handle } = req.params
+
+    const [profile, submissions] = await Promise.all([
+      getCodeforcesProfile(handle),
+      getCodeforcesSubmissions(handle),
+    ])
+
+    res.json({
+      ...profile,
+      solved: aggregateSubmissions(submissions),
+      trend: aggregateRatingTrend(profile.ratingHistory),
+    })
   } catch (err) {
-    // Codeforces gives a clear "not found" style message — pass it through
-    // as a 404 rather than a generic 500, since it's a client input problem.
     res.status(404).json({ error: err.message })
   }
 })
